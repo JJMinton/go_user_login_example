@@ -1,0 +1,7 @@
+{
+ "rootURL": "http://localhost:8080",
+ "port": ":8080",
+ "cookieHashKey": "C5C82F5AE639AE37BE77DCD8E5C98HF9",
+ "cookieBlockKey": "CF5778DDD1677CE7EFCE5CAA62CB1QV5",
+ "cookieName": "session"
+}

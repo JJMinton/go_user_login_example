@@ -1,0 +1,4 @@
+{"cid": "client-credentials",
+ "csecret": "secret-credentials",
+ "callbackURL": "/auth/google/callback"
+}
