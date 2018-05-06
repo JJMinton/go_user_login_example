@@ -76,7 +76,7 @@ func main() {
     http.HandleFunc("/auth/google/login", googleLoginHandler)
     http.HandleFunc(googleCred.Callback, googleCallbackHandler)
     // API Endpoints
-    
+    http.HandleFunc("/endpoints/server_name", authenticatePage(dataEndpoint))
     // Start server
     http.ListenAndServe(config.Port, nil)
 }
@@ -95,6 +95,24 @@ func googleLoginHandler(res http.ResponseWriter, req *http.Request) {
     http.Redirect(res, req, googleConf.AuthCodeURL(state), http.StatusSeeOther)
 }
 
+type Profile struct {
+    Id              string `json:"id"`
+    Name            string `json:"name"`
+    PreferredEmail  string `json:"preferred_email"`
+    PhotoUrl        string `json:"photo_url"`
+}
+
+type GoogleProfile struct {
+    Id              string `json:"id"`
+    Email           string `json:"email"`
+    Name            string `json:"name"`
+    GivenName       string `json:"given_name"`
+    FamilyName      string `json:"family_name"`
+    Link            string `json:"link"`
+    Picture         string `json:"picture"`
+    Gender          string `json:"gender"`
+}
+
 func googleCallbackHandler(res http.ResponseWriter, req *http.Request) {
     authcode := req.FormValue("code")
     tok, err := googleConf.Exchange(oauth2.NoContext, authcode)
@@ -104,14 +122,19 @@ func googleCallbackHandler(res http.ResponseWriter, req *http.Request) {
     log.Print(string(tok.AccessToken))
     response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + tok.AccessToken)
     defer response.Body.Close()
-    contents, err := ioutil.ReadAll(response.Body)
+    file, err := ioutil.ReadAll(response.Body)
     if err != nil {
       log.Fatal("failed to read google respones body")
     }
-    log.Print(string(contents))
+    var googleProfile GoogleProfile
+    json.Unmarshal(file, &googleProfile)
+    log.Print(string(file))
     //TODO: do a check and login here.
     log.Print("logging in from google callback handler")
-    login(res, req)
+    login(res, req, Profile{Id: googleProfile.Id,
+                            Name: googleProfile.Name,
+                            PreferredEmail: googleProfile.Email,
+                            PhotoUrl: googleProfile.Picture})
     http.Redirect(res, req, "/private/login_success.html", http.StatusSeeOther)
 }
 
@@ -121,10 +144,11 @@ func googleCallbackHandler(res http.ResponseWriter, req *http.Request) {
 func authenticatePage(f http.HandlerFunc) http.HandlerFunc {
     return func(res http.ResponseWriter, req *http.Request) {
         log.Print("starting authentication")
-        loggedin, err := GetCookie(req, "loggedin")
+        cookie, err := GetCookie(req)
         if err != nil {
             log.Fatal("Failed to open cookie")
         }
+        loggedin := string(cookie["loggedin"])
         if loggedin == "false" || loggedin == "" { //return error/login page
             log.Print("authentication failed")
             log.Print(loggedin)
@@ -137,9 +161,12 @@ func authenticatePage(f http.HandlerFunc) http.HandlerFunc {
 }
 
 //Login/logout cookies
-func login(res http.ResponseWriter, req *http.Request) {
+func login(res http.ResponseWriter, req *http.Request, profile Profile) {
     log.Print("saving logged in cookies")
-    err := SetCookie(res, req, map[string]string{"loggedin": "true",})
+    err := SetCookie(res, req, map[string]string{"loggedin": "true",
+                                                 "name": profile.Name,
+                                                 "id": profile.PreferredEmail,
+                                                 "photo": profile.PhotoUrl})
     if err != nil {
         log.Fatal("Failed to save cookie")
     }
@@ -170,18 +197,34 @@ func SetCookie(w http.ResponseWriter, r *http.Request, value map[string]string) 
     }
 }
 
-func GetCookie(r *http.Request, key string) (string, error) {
+func GetCookie(r *http.Request) (map[string]string, error) {
     if cookie, err := r.Cookie(config.CookieName); err == nil {
         value := make(map[string]string)
         if err = store.Decode(config.CookieName, cookie.Value, &value); err == nil {
-            return value[key], err
+            log.Print("Cookies accessed")
+            return value, err
         } else {
             log.Print("failed to decode cookie")
-            return "", err
+            return make(map[string]string), err
         }
     } else {
         log.Print("failed to retrieve cookie")
-        return "", err
+        log.Print(err)
+        return make(map[string]string), err
     }
 }
 
+//API Endpoints
+func dataEndpoint(res http.ResponseWriter, req *http.Request) {
+    res.Header().Set("Content-Type", "application/json")
+    cookie, err := GetCookie(req)
+    if err != nil {
+        log.Fatal("Failed to open cookie")
+    }
+    res.WriteHeader(http.StatusOK)
+    if cookieJson, err := json.Marshal(cookie); err == nil {
+        res.Write(cookieJson)
+    } else {
+        log.Fatal("failed to marshal cookie")
+    }
+}

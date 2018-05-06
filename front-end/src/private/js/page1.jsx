@@ -3,7 +3,7 @@ import {render} from 'react-dom';
 
 class App extends React.Component {
   render () {
-    return <p> Goodbye React!</p>;
+    return <p> Page 1!</p>;
   }
 }
 
