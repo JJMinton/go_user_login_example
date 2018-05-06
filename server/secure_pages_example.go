@@ -117,14 +117,16 @@ func googleCallbackHandler(res http.ResponseWriter, req *http.Request) {
     authcode := req.FormValue("code")
     tok, err := googleConf.Exchange(oauth2.NoContext, authcode)
     if err != nil {
-        log.Fatal("err is ", err)
+        log.Print("err is ", err)
+        http.Redirect(res, req, "/private/failed_login.html", http.StatusSeeOther)
     }
     log.Print(string(tok.AccessToken))
     response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + tok.AccessToken)
     defer response.Body.Close()
     file, err := ioutil.ReadAll(response.Body)
     if err != nil {
-      log.Fatal("failed to read google respones body")
+        log.Print("failed to read google respones body")
+        http.Redirect(res, req, "/private/failed_login.html", http.StatusSeeOther)
     }
     var googleProfile GoogleProfile
     json.Unmarshal(file, &googleProfile)
@@ -146,13 +148,14 @@ func authenticatePage(f http.HandlerFunc) http.HandlerFunc {
         log.Print("starting authentication")
         cookie, err := GetCookie(req)
         if err != nil {
-            log.Fatal("Failed to open cookie")
+            log.Print("Failed to open cookie")
+            http.Redirect(res, req, "/failed_login.html", http.StatusInternalServerError)
         }
         loggedin := string(cookie["loggedin"])
         if loggedin == "false" || loggedin == "" { //return error/login page
             log.Print("authentication failed")
             log.Print(loggedin)
-            http.Redirect(res, req, "/failed_login.html", http.StatusSeeOther)
+            http.Redirect(res, req, "/failed_login.html", http.StatusUnauthorized)
         } else { //return page
             log.Print("authentication complete")
             f(res, req)
@@ -168,7 +171,7 @@ func login(res http.ResponseWriter, req *http.Request, profile Profile) {
                                                  "id": profile.PreferredEmail,
                                                  "photo": profile.PhotoUrl})
     if err != nil {
-        log.Fatal("Failed to save cookie")
+        http.Redirect(res, req, "/unknown_error.html", http.StatusInternalServerError)
     }
 }
 
@@ -176,7 +179,7 @@ func logout(res http.ResponseWriter, req *http.Request) {
     log.Print("saving logged out cookies")
     err := SetCookie(res, req, map[string]string{"loggedin": "false",})
     if err != nil {
-        log.Fatal("Failed to save cookie")
+        http.Redirect(res, req, "/unknown_error.html", http.StatusInternalServerError)
     }
 }
 
@@ -219,12 +222,12 @@ func dataEndpoint(res http.ResponseWriter, req *http.Request) {
     res.Header().Set("Content-Type", "application/json")
     cookie, err := GetCookie(req)
     if err != nil {
-        log.Fatal("Failed to open cookie")
+        res.Write([]byte("{Cookie read error}"))
     }
     res.WriteHeader(http.StatusOK)
     if cookieJson, err := json.Marshal(cookie); err == nil {
         res.Write(cookieJson)
     } else {
-        log.Fatal("failed to marshal cookie")
+        res.Write([]byte("{Server error}"))
     }
 }

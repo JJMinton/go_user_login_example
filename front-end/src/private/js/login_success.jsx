@@ -12,11 +12,12 @@ class App extends React.Component {
 
     handleClick() {
         fetch("../endpoints/server_name", {credentials: "same-origin",})
-                .then((response) => response.json())
-                .then((responseJson) => {
-                    this.setState( { value : responseJson.name } );
-                }).catch((error) => {
+            .then((response) => response.json())
+            .then((responseJson) => {
+                this.setState( { value : responseJson.name } );
+            }).catch((error) => {
                 console.error(error);
+                this.setState( { value : "who ever you are." } );
             })
     }
 
