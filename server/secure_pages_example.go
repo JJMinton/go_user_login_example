@@ -2,7 +2,6 @@ package main
 
 
 import ("net/http"
-        "io"
         "io/ioutil"
         "log"
         "os"
@@ -69,57 +68,24 @@ func init() {
 
 //Router
 func main() {
-    http.HandleFunc("/", rootHandler)
+    // Front end
+    http.HandleFunc("/private/", authenticatePage(http.FileServer(http.Dir("./front-end/dist")).ServeHTTP))
+    http.Handle("/", http.FileServer(http.Dir("./front-end/dist/public")))
+    // Authentication
+    http.HandleFunc("/logout", logoutHandler)
     http.HandleFunc("/auth/google/login", googleLoginHandler)
     http.HandleFunc(googleCred.Callback, googleCallbackHandler)
-    http.HandleFunc("/logout", logoutHandler)
-    http.HandleFunc("/protectedpage", authenticatePage(protectedPageHandler))
+    // API Endpoints
+    
+    // Start server
     http.ListenAndServe(config.Port, nil)
 }
 
 
-//Handlers
-func rootHandler(res http.ResponseWriter, req *http.Request) {
-    io.WriteString(res, `
-<!DOCTYPE html>
-<html>
-  <head></head>
-  <body>
-    <p><a href="/auth/google/login">LOGIN</a></p>
-    <p><a href="/logout">LOGOUT</a></p>
-    <p><a href="/protectedpage">Test login</a></p>
-  </body>
-</html>`)
-}
-
-func failedLoginHandler(res http.ResponseWriter, req *http.Request) {
-    io.WriteString(res, `
-<!DOCTYPE html>
-<html>
-  <head></head>
-  <body>
-    <p>Failed login, try again.</p>
-    <a href="/">Login Page</a>
-  </body>
-</html>`)
-}
-
+//Logout Handler
 func logoutHandler(res http.ResponseWriter, req *http.Request) {
     logout(res, req)
-    http.Redirect(res, req, "/", http.StatusSeeOther)
-}
-
-func protectedPageHandler(res http.ResponseWriter, req *http.Request) {
-    io.WriteString(res, `
-<!DOCTYPE html>
-<html>
-  <head></head>
-  <body>
-    <p>This page shouldn't be accessible without logging in</p>
-    <a href="/logout">Logout</a>
-  </body>
-</html>`)
-
+    http.Redirect(res, req, "/index.html", http.StatusSeeOther)
 }
 
 //Google login
@@ -129,7 +95,7 @@ func googleLoginHandler(res http.ResponseWriter, req *http.Request) {
     http.Redirect(res, req, googleConf.AuthCodeURL(state), http.StatusSeeOther)
 }
 
-func googleCallbackHandler(w http.ResponseWriter, req *http.Request) {
+func googleCallbackHandler(res http.ResponseWriter, req *http.Request) {
     authcode := req.FormValue("code")
     tok, err := googleConf.Exchange(oauth2.NoContext, authcode)
     if err != nil {
@@ -145,20 +111,32 @@ func googleCallbackHandler(w http.ResponseWriter, req *http.Request) {
     log.Print(string(contents))
     //TODO: do a check and login here.
     log.Print("logging in from google callback handler")
-    login(w, req)
-    io.WriteString(w, `
-<!DOCTYPE html>
-<html>
-  <head></head>
-  <body>` +
-   `<p>You are now logged in.</p>` +
-   `<a href="/protectedpage">Test on this protected page</a>` +
-`  </body>
-</html>`)
+    login(res, req)
+    http.Redirect(res, req, "/private/login_success.html", http.StatusSeeOther)
 }
 
 
-//Login/logout
+
+//Authentication/page protection middleware
+func authenticatePage(f http.HandlerFunc) http.HandlerFunc {
+    return func(res http.ResponseWriter, req *http.Request) {
+        log.Print("starting authentication")
+        loggedin, err := GetCookie(req, "loggedin")
+        if err != nil {
+            log.Fatal("Failed to open cookie")
+        }
+        if loggedin == "false" || loggedin == "" { //return error/login page
+            log.Print("authentication failed")
+            log.Print(loggedin)
+            http.Redirect(res, req, "/failed_login.html", http.StatusSeeOther)
+        } else { //return page
+            log.Print("authentication complete")
+            f(res, req)
+        }
+    }
+}
+
+//Login/logout cookies
 func login(res http.ResponseWriter, req *http.Request) {
     log.Print("saving logged in cookies")
     err := SetCookie(res, req, map[string]string{"loggedin": "true",})
@@ -172,25 +150,6 @@ func logout(res http.ResponseWriter, req *http.Request) {
     err := SetCookie(res, req, map[string]string{"loggedin": "false",})
     if err != nil {
         log.Fatal("Failed to save cookie")
-    }
-}
-
-//Authentication/page protection middleware
-func authenticatePage(f http.HandlerFunc) http.HandlerFunc {
-    return func(res http.ResponseWriter, req *http.Request) {
-        log.Print("starting authentication")
-        loggedin, err := GetCookie(req, "loggedin")
-        if err != nil {
-            log.Fatal("Failed to open cookie")
-        }
-        if loggedin == "false" || loggedin == "" { //return error/login page
-            log.Print("authentication failed")
-            log.Print(loggedin)
-            failedLoginHandler(res, req)
-        } else { //return page
-            log.Print("authentication complete")
-            f(res, req)
-        }
     }
 }
 

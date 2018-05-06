@@ -1,0 +1,6 @@
+*/node_modules/*
+front-end/dist/
+package-lock.json
+google_creds.json
+
+
