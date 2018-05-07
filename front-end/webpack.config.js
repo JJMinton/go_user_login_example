@@ -7,6 +7,7 @@ const NODE_MODULES = path.resolve(__dirname, './node_modules/');
 
 const config = {
   mode: 'development',
+  devtool: "source-map",
   module : {
      rules : [
         {
@@ -56,6 +57,7 @@ const public_config = Object.assign({}, config, {
         index: path.resolve(SRC_DIR, "public/js/index.jsx"),
         failed_login: path.resolve(SRC_DIR, "public/js/failed_login.jsx"),
         page1: path.resolve(SRC_DIR, "public/js/page1.jsx"),
+        signup: path.resolve(SRC_DIR, "public/js/signup.jsx"),
     },
     output : {
         path : DIST_DIR + '/public/js/',
@@ -71,6 +73,11 @@ const public_config = Object.assign({}, config, {
           template : SRC_DIR + "/public/failed_login.html",
           filename : DIST_DIR + "/public/failed_login.html",
           chunks : ['failed_login'],
+      }),
+      new HtmlWebpackPlugin({
+          template : SRC_DIR + "/public/signup.html",
+          filename : DIST_DIR + "/public/signup.html",
+          chunks : ['signup'],
       }),
       new HtmlWebpackPlugin({
           template : SRC_DIR + "/public/page1.html",
